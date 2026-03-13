@@ -1,0 +1,95 @@
+# bc-fix — Behavioral Contracts Claude Code Skill
+
+> **WRITES CODE AND CREATES COMMITS.** This skill modifies your source files and commits changes to git. It always shows you a full fix plan and waits for your approval before touching anything.
+
+A Claude Code skill that scans your TypeScript codebase for behavioral contract violations, analyzes patterns across all packages, proposes a batched fix plan, and — after your approval — applies fixes with atomic commits.
+
+## What it does
+
+1. Runs a full baseline scan (same as bc-scan, read-only)
+2. Groups all violations by package and detects cross-cutting patterns
+3. Reads every affected file before proposing any changes
+4. Presents a complete fix plan and **waits for your approval**
+5. Applies fixes in batches, commits each batch, and rescans after each to verify progress
+6. Uploads before/after results to the dashboard so you can track improvement over time
+
+## Just want to audit without fixing?
+
+Use **[bc-scan](https://github.com/behavioral-contracts/claude-code-skill-bc-scan)** — the companion skill that is fully read-only. It scans, reports, and uploads results without ever modifying your code or creating commits.
+
+```bash
+gh repo clone behavioral-contracts/claude-code-skill-bc-scan ~/.claude/skills/bc-scan
+```
+
+Use `bc-scan` when you want to **audit** your codebase, run a CI check, or explore violations before deciding what to fix.
+Use `bc-fix` when you want to **remediate** violations and have Claude write and commit the fixes.
+
+## Install
+
+```bash
+gh repo clone behavioral-contracts/claude-code-skill-bc-fix ~/.claude/skills/bc-fix
+```
+
+Or manually:
+
+```bash
+git clone https://github.com/behavioral-contracts/claude-code-skill-bc-fix ~/.claude/skills/bc-fix
+```
+
+## Prerequisites
+
+1. **A Behavioral Contracts account** — [app.behavioral-contracts.com](https://app.behavioral-contracts.com) (Solo plan or higher for API access)
+2. **MCP configured** — Follow the setup guide at [app.behavioral-contracts.com/developer](https://app.behavioral-contracts.com/developer)
+3. **The repository connected** — The GitHub repo you're scanning must be connected in your Behavioral Contracts dashboard
+
+## Usage
+
+In any Claude Code session, type:
+
+```
+/bc-fix
+```
+
+Or say: **"bc fix"**, **"fix behavioral contract violations"**, **"fix bc errors"**
+
+### Options
+
+| Command | Description |
+|---------|-------------|
+| `/bc-fix` | Scan + fix all ERROR violations (approval required) |
+| `/bc-fix --warnings` | Also fix WARNING violations |
+| `/bc-fix --dry-run` | Scan + show plan, but make no changes |
+| `/bc-fix --package axios` | Fix only violations for one package |
+| `/bc-fix --skip-upload` | Run locally only, no dashboard upload |
+
+### Dry run first
+
+If you're unsure what changes will be made, always run `--dry-run` first:
+
+```
+/bc-fix --dry-run
+```
+
+This shows the full fix plan — which files will be touched, what pattern each fix follows, and how many violations each batch resolves — without writing a single line of code.
+
+## How it finds your API key
+
+The skill checks in this order:
+1. `BC_API_KEY` environment variable (if set)
+2. `~/.claude.json` → `projects.<cwd>.mcpServers.behavioral-contracts.headers.Authorization`
+3. `~/.claude.json` → top-level `mcpServers.behavioral-contracts.headers.Authorization`
+4. `~/.claude/claude_desktop_config.json` → same path
+
+If MCP is already configured for your project, you're already set.
+
+## How fixes are applied
+
+- Fixes match your existing code style (indentation, quote style, import paths)
+- Errors are never silently swallowed — fixes always log or rethrow
+- Package-specific error type guards are used when available (e.g. `axios.isAxiosError()`)
+- Each batch is a separate atomic commit with a descriptive message
+- Pre-commit hook failures are handled: the hook error is fixed and a new commit is created (never `--amend`)
+
+## Contributing
+
+Issues and PRs welcome at [github.com/behavioral-contracts/claude-code-skill-bc-fix](https://github.com/behavioral-contracts/claude-code-skill-bc-fix).
