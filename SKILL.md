@@ -17,6 +17,8 @@ Agentic loop that scans a repo for behavioral contract violations, triages false
 /bc-fix --skip-upload      # Run locally only, no dashboard upload or MCP feedback
 /bc-fix --local            # Point at http://localhost:3000 instead of production (for saas development)
 /bc-fix --auto             # Fully autonomous: skip all approval gates and prompts, run every package to completion
+/bc-fix --batch            # Scan once → fix all → rescan once. No intermediate scans. For automated use.
+/bc-fix --batch --auto     # Fully autonomous batch mode (no approval gate + no intermediate scans)
 ```
 
 ---
@@ -367,6 +369,12 @@ Approach:  <Universal helper + per-package / Per-package only / Universal only>
 
 ```
 
+If `--batch` mode is active: add this note below the plan header:
+```
+Note: --batch mode active. Intermediate rescans are disabled.
+All fixes will be committed sequentially, then ONE final scan will verify everything.
+```
+
 If `--auto` was passed: print the plan and immediately proceed without asking. Do not use AskUserQuestion.
 
 Otherwise, use the AskUserQuestion tool with a dropdown:
@@ -491,6 +499,66 @@ If the new scan reveals violations NOT in the original baseline:
 If violations remain and more batches exist: proceed to next batch (no additional approval needed once the plan is approved).
 
 If new violations were discovered in 4.5 and user said yes (or `--auto` is set): append them to the plan and continue.
+
+---
+
+## Phase 4 (--batch mode) — Fix All Packages, Then One Rescan
+
+When `--batch` flag is set, replace the standard Phase 4 loop with this sequence.
+
+**DO NOT rescan after each package batch.** Instead:
+
+### Step 4.1 — Apply all fixes
+
+For each package batch in the approved plan:
+- Apply all code fixes (same quality rules as standard mode)
+- Commit each batch:
+  ```bash
+  git add <specific files changed>
+  git commit -m "$(cat <<'EOF'
+  fix(bc): resolve <package> violations
+
+  <1-2 sentence description>
+
+  Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+- Do NOT trigger a cloud scan after this commit
+- Do NOT push resolve feedback yet (no new scan ID)
+- Continue to next package batch
+
+Print after each commit:
+```
+✓ <package>  (<N> violations fixed, committed — scan deferred to final verify)
+```
+
+### Step 4.2 — Push all commits
+
+```bash
+git push
+```
+
+### Step 4.3 — One final scan
+
+Trigger ONE cloud scan (same as Step 1.1 — use `trigger_scan` then `poll_scan_status` via `/api/mcp`). Wait for completion.
+
+### Step 4.4 — Push all resolve feedback
+
+For every violation that was fixed across ALL batches, call `resolve_violation` MCP tool.
+Call `batch_review_violations` for the initial triage labels (TP/FP/FLAG) if not yet pushed.
+Use the new final scan ID for any scan-scoped feedback.
+
+### Step 4.5 — Delta report
+
+```
+Batch complete
+Before: <N> violations
+After:  <M> violations
+Fixed:  <N-M>
+Remaining: <M> (list if > 0)
+Scans triggered: 2 (baseline + verify) vs <N+1> in standard mode
+```
 
 ---
 
